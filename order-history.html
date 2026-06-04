@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Trade Africa - Historia ya Malipo</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .history-card { max-width: 900px; margin: 40px auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+        .history-card h3 { color: #1a365d; margin-bottom: 10px; }
+        .transaction-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .transaction-table th, .transaction-table td { padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+        .transaction-table th { background: #edf2f7; color: #2d3748; }
+        .status-success { color: #2f855a; font-weight: 700; }
+        .status-failed { color: #c53030; font-weight: 700; }
+        .status-pending { color: #d69e2e; font-weight: 700; }
+        .link-row { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <script>
+        if (!sessionStorage.getItem('active_session')) {
+            alert('⚠️ Tafadhali ingia kwenye mfumo kwanza!');
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <header>
+        <h2>Smart Trade Africa Ltd</h2>
+        <button onclick="goBack()" style="background-color: #2b6cb0; color: white; border: none; padding: 10px 14px; border-radius: 5px; cursor: pointer;">Rudi Soko</button>
+    </header>
+
+    <div class="container history-card">
+        <h3>Historia ya Malipo</h3>
+        <p style="color:#4a5568;">Angalia malipo yote uliyofanya sasa hivi katika mfumo. Hii ni sehemu ya uthibitisho wa malipo yako ya usalama.</p>
+        <div id="historyMessage" style="color:#718096; margin-top:10px;">Inapakia historia ya malipo...</div>
+        <table class="transaction-table" id="transactionTable" style="display:none;">
+            <thead>
+                <tr>
+                    <th>Reference</th>
+                    <th>Kiasi</th>
+                    <th>Hali</th>
+                    <th>Tarehe</th>
+                </tr>
+            </thead>
+            <tbody id="transactionBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        async function fetchTransactions() {
+            const response = await fetch('/api/transactions');
+            const data = await response.json();
+            const messageEl = document.getElementById('historyMessage');
+            const table = document.getElementById('transactionTable');
+            const body = document.getElementById('transactionBody');
+
+            if (!response.ok || !data.success) {
+                messageEl.textContent = data.message || 'Imeshindikana kupata historia ya malipo.';
+                return;
+            }
+
+            if (!data.transactions || data.transactions.length === 0) {
+                messageEl.textContent = 'Hakuna historia ya malipo kwa sasa.';
+                return;
+            }
+
+            messageEl.style.display = 'none';
+            table.style.display = 'table';
+            body.innerHTML = data.transactions.map(txn => `
+                <tr>
+                    <td>${txn.reference}</td>
+                    <td>TSh ${txn.amount.toFixed(0)}</td>
+                    <td class="${txn.status === 'SUCCESSFUL' ? 'status-success' : txn.status === 'PENDING' ? 'status-pending' : 'status-failed'}">${txn.status}</td>
+                    <td>${new Date(txn.created_at).toLocaleString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        function goBack() {
+            window.location.href = 'index.html';
+        }
+
+        window.onload = fetchTransactions;
+    </script>
+</body>
+</html>

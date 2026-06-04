@@ -1,0 +1,73 @@
+﻿<!DOCTYPE html>
+<html lang="sw">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Trade Africa - Admin</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .admin-card { max-width: 520px; margin: 40px auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+        .admin-card h3 { color: #1a365d; }
+        .admin-card input, .admin-card textarea { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 16px; }
+        .admin-card textarea { resize: vertical; min-height: 100px; }
+    </style>
+</head>
+<body>
+    <script>
+        if (sessionStorage.getItem('admin_session') !== 'authenticated_securely') {
+            alert('⚠️ Access Denied! Ingia kama Admin kwanza.');
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <header>
+        <h2>Smart Trade Africa - Admin Panel</h2>
+        <button onclick="adminLogout()" style="background-color: #e53e3e; color: white; border: none; padding: 10px 14px; border-radius: 5px; cursor: pointer;">Ondoka</button>
+    </header>
+
+    <div class="container admin-card">
+        <h3>Ongeza Bidhaa Mpya kwa Soko</h3>
+        <p style="color:#4a5568; margin-bottom:20px;">Tumia fomu hapa chini kuongeza bidhaa mpya kwenye soko la Smart Trade Africa.</p>
+
+        <input type="text" id="prodName" placeholder="Jina la Bidhaa" required>
+        <input type="number" id="prodPrice" placeholder="Bei ya Bidhaa (tsh)" required>
+        <textarea id="prodDescription" placeholder="Maelezo ya Bidhaa"></textarea>
+        <input type="text" id="prodImage" placeholder="URL ya Picha ya Bidhaa">
+        <button class="btn" onclick="saveProductToServer()">Hifadhi Bidhaa</button>
+        <div id="adminMessage" style="margin-top:20px; color:#2f855a;"></div>
+    </div>
+
+    <script>
+        async function saveProductToServer() {
+            const name = document.getElementById('prodName').value.trim();
+            const price = parseFloat(document.getElementById('prodPrice').value);
+            const description = document.getElementById('prodDescription').value.trim();
+            const image_url = document.getElementById('prodImage').value.trim();
+            if (!name || !price || price <= 0) {
+                return alert('Tafadhali jaza jina la bidhaa na bei sahihi.');
+            }
+
+            const response = await fetch('/api/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, price, description, image_url })
+            });
+            const result = await response.json();
+            if (result.success) {
+                document.getElementById('adminMessage').textContent = '✅ Bidhaa imeongezwa kwa mafanikio.';
+                document.getElementById('prodName').value = '';
+                document.getElementById('prodPrice').value = '';
+                document.getElementById('prodDescription').value = '';
+                document.getElementById('prodImage').value = '';
+            } else {
+                alert('Imeshindikana kuongeza bidhaa.');
+            }
+        }
+
+        function adminLogout() {
+            sessionStorage.removeItem('admin_session');
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+</html>
