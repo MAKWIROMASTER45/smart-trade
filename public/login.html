@@ -1,0 +1,208 @@
+﻿<!DOCTYPE html>
+<html lang="sw">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Trade Africa - Login</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .auth-card { max-width: 420px; margin: 40px auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+        .auth-card h3 { margin: 0 0 10px; color: #1a365d; }
+        .auth-card p { color: #4a5568; margin-bottom: 20px; }
+        input[type="email"], input[type="password"] { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 16px; }
+        .form-actions { display: grid; gap: 12px; }
+        .link-row { margin-top: 20px; font-size: 14px; }
+        .link-row a { color: #3182ce; text-decoration: none; display: block; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h2>Smart Trade Africa Ltd</h2>
+        <span class="trust-badge">Secure Login</span>
+    </header>
+
+    <div class="container auth-card">
+        <h3>Fungua Akaunti au Ingia</h3>
+        <p>Karibu kwenye Smart Trade Africa. Tafadhali tumia barua pepe halali na nenosiri imara.</p>
+
+        <form id="authForm" onsubmit="return false;">
+            <input type="email" id="email" placeholder="Barua Pepe (Email)" required>
+            <input type="password" id="password" placeholder="Nenosiri (Password)" required>
+            <input type="password" id="confirmPassword" placeholder="Thibitisha Nenosiri (Confirm Password)">
+            <div style="text-align:left; margin-bottom:15px; font-size:14px; color:#4a5568;">
+                <input type="checkbox" id="showPasswordToggle" onclick="togglePasswordVisibility()">
+                <label for="showPasswordToggle" style="cursor:pointer; user-select:none;">Onyesha Nenosiri</label>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-secondary" onclick="handleRegister()" type="button">Create Account Securely</button>
+                <button class="btn btn-primary" onclick="handleLogin()" type="button">Log In Securely</button>
+            </div>
+        </form>
+
+        <p style="color: #718096; font-size: 14px; margin: 15px 0;">--- AU ---</p>
+
+        <button class="btn btn-biometric" onclick="handleWebAuthnBiometric()">Authenticate with Fingerprint (WebAuthn)</button>
+
+        <div class="link-row">
+            <a href="#" onclick="recoverPasswordSecurely(); return false;">⚠️ Recover Password Securely</a>
+            <a href="#" onclick="adminLoginPrompt(); return false;">🔑 Admin Access Gateway</a>
+        </div>
+    </div>
+
+    <script>
+        function togglePasswordVisibility() {
+            const password = document.getElementById('password');
+            const confirm = document.getElementById('confirmPassword');
+            const type = password.type === 'password' ? 'text' : 'password';
+            password.type = type;
+            if (confirm.value) confirm.type = type;
+        }
+
+        async function handleRegister() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (!email || !password) {
+                return alert('Jaza barua pepe na nenosiri.');
+            }
+            if (password.length < 8) {
+                return alert('Nenosiri lazima liwe na angalau herufi 8.');
+            }
+            if (password !== confirmPassword) {
+                return alert('Nenosiri na uthibitisho havifanani.');
+            }
+
+            const response = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: email, password })
+            });
+            const result = await response.json();
+            alert(result.message || 'Imekamilika.');
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                return alert('Jaza barua pepe na nenosiri.');
+            }
+
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: email, password })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                return alert(result.message || 'Login failed.');
+            }
+
+            sessionStorage.setItem('active_session', email);
+            sessionStorage.setItem('active_user', email);
+            window.location.href = 'index.html';
+        }
+
+        async function recoverPasswordSecurely() {
+            const email = prompt('Tafadhali andika barua pepe yako ya usajili:');
+            if (!email) {
+                return;
+            }
+            const response = await fetch('/api/password-reset-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: email.trim() })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                return alert(result.message || 'Imeshindikana kuomba urejeshaji.');
+            }
+            alert(`${result.message} (Simulated code: ${result.code})`);
+
+            const code = prompt('Weka msimbo wa urejeshaji uliopelekwa:');
+            if (!code) {
+                return alert('Umeomba urejeshaji lakini bado hukutoa msimbo.');
+            }
+            const newPassword = prompt('Tafadhali ingiza nenosiri jipya (chini ya herufi 8):');
+            if (!newPassword || newPassword.length < 8) {
+                return alert('Nenosiri mpya lazima liwe na angalau herufi 8.');
+            }
+            const confirmPassword = prompt('Thibitisha nenosiri jipya:');
+            if (newPassword !== confirmPassword) {
+                return alert('Uthibitisho wa nenosiri haukufanikiwa.');
+            }
+
+            const resetResponse = await fetch('/api/password-reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: email.trim(), code: code.trim(), newPassword })
+            });
+            const resetResult = await resetResponse.json();
+            alert(resetResult.message || 'Nenosiri limebadilika.');
+        }
+
+        async function handleWebAuthnBiometric() {
+            const email = document.getElementById('email').value.trim();
+            if (!email) {
+                return alert('Tafadhali weka barua pepe ili kutumia biometric.');
+            }
+            if (!window.PublicKeyCredential) {
+                return alert('Kifaa chako hakiteizi WebAuthn. Hakikisha unatumia HTTPS au localhost.');
+            }
+            try {
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+                const publicKey = {
+                    challenge,
+                    rp: { name: 'Smart Trade Africa' },
+                    user: {
+                        id: new TextEncoder().encode(email),
+                        name: email,
+                        displayName: email
+                    },
+                    pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+                    timeout: 60000,
+                    authenticatorSelection: {
+                        authenticatorAttachment: 'platform',
+                        userVerification: 'preferred'
+                    },
+                    attestation: 'none'
+                };
+                await navigator.credentials.create({ publicKey });
+                const authResponse = await fetch('/api/biometric-auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: email })
+                });
+                const result = await authResponse.json();
+                if (!authResponse.ok || !result.success) {
+                    return alert(result.message || 'Biometric authentication failed.');
+                }
+                sessionStorage.setItem('active_session', email);
+                sessionStorage.setItem('active_user', email);
+                alert(result.message);
+                window.location.href = 'index.html';
+            } catch (err) {
+                console.error(err);
+                alert('❌ Biometrics imekataa au haikuweza kufanya authentication.');
+            }
+        }
+
+        function adminLoginPrompt() {
+            const adminUser = prompt('Ingiza Jina la Msimamizi (Admin Username):');
+            if (!adminUser) return;
+            const adminPass = prompt('Ingiza Nenosiri la Msimamizi (Admin Password):');
+            if (!adminPass) return;
+            if (adminUser === 'admin@smarttrade.africa' && adminPass === 'STA_Admin#2026!Secure') {
+                sessionStorage.setItem('admin_session', 'authenticated_securely');
+                alert('✅ Admin authenticated.');
+                window.location.href = 'admin.html';
+            } else {
+                alert('❌ Credentials invalid.');
+            }
+        }
+    </script>
+</body>
+</html>

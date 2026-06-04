@@ -1,0 +1,173 @@
+﻿<!DOCTYPE html>
+<html lang="sw">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Trade Africa - Soko Kuu</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
+        .cart-panel { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+        .cart-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
+        .cart-item:last-child { border-bottom: none; }
+        .status-box { margin-top: 20px; padding: 15px; border-radius: 8px; background: #edf2f7; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <script>
+        if (!sessionStorage.getItem('active_session')) {
+            alert('⚠️ Tafadhali ingia kwenye mfumo kwanza!');
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <header>
+        <h2>Smart Trade Africa Ltd</h2>
+        <div>
+            <span class="trust-badge">User: <strong id="currentUser"></strong></span>
+            <button onclick="userLogout()" style="background-color: #e53e3e; color: white; border: none; padding: 8px 12px; border-radius: 4px; margin-left: 10px; cursor: pointer;">Kuondoka</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <h2 style="color:#1a365d;">Karibu Kwenye Soko la Smart Trade</h2>
+        <p style="color:#4a5568;">Tafadhali chagua bidhaa, ziweke kwenye cart, na fanya malipo salama kupitia mock payment API.</p>
+        <p style="margin-bottom: 20px;"><a href="order-history.html" class="btn" style="display:inline-block; width:auto; padding: 10px 18px;">Angalia Historia ya Malipo</a></p>
+
+        <div class="grid-layout">
+            <div>
+                <div id="productList" class="product-grid"></div>
+            </div>
+            <div class="cart-panel">
+                <h3>Cart Yangu</h3>
+                <div id="cartItems"></div>
+                <div style="margin-top: 16px; font-weight: bold; color: #1a365d;">Jumla: <span id="cartTotal">TSh 0</span></div>
+                <button class="btn" style="margin-top: 20px;" onclick="checkoutCart()">Checkout Secure</button>
+                <div style="margin-top: 16px;">
+                    <label for="statusReference" style="display:block; margin-bottom:8px; font-weight:600; color:#2d3748;">Angalia Hali ya Malipo kwa Reference</label>
+                    <input id="statusReference" type="text" placeholder="Weka reference ya malipo hapa" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #cbd5e0; border-radius:4px;">
+                    <button class="btn btn-secondary" style="width:100%;" onclick="checkPaymentStatus()">Angalia Hali ya Malipo</button>
+                </div>
+                <div id="paymentStatus" class="status-box" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const cart = [];
+        const currencyFormatter = new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', minimumFractionDigits: 0 });
+
+        document.getElementById('currentUser').textContent = sessionStorage.getItem('active_user') || 'Mtumiaji';
+
+        async function fetchProducts() {
+            const response = await fetch('/api/products');
+            const products = await response.json();
+            const list = document.getElementById('productList');
+            if (!Array.isArray(products) || products.length === 0) {
+                list.innerHTML = '<p style="grid-column: 1/-1; color:#718096;">Hakuna bidhaa sokoni kwa sasa.</p>';
+                return;
+            }
+            list.innerHTML = products.map(product => `
+                <div class="product-card">
+                    <h3 style="color:#1a365d; margin-bottom:10px;">${product.name}</h3>
+                    <p style="color:#4a5568; font-size:14px; min-height:64px;">${product.description || 'Hakuna maelezo.'}</p>
+                    <p style="color:#2f855a; font-weight:bold; font-size:18px; margin: 12px 0;">${currencyFormatter.format(product.price)}</p>
+                    <button class="btn" onclick="addToCart(${product.id}, ${JSON.stringify(product.name)}, ${product.price})">Ongeza Cart</button>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function addToCart(id, name, price) {
+            const existing = cart.find(item => item.id === id);
+            if (existing) {
+                existing.quantity += 1;
+            } else {
+                cart.push({ id, name, price, quantity: 1 });
+            }
+            renderCart();
+        }
+
+        function renderCart() {
+            const container = document.getElementById('cartItems');
+            if (cart.length === 0) {
+                container.innerHTML = '<p style="color:#718096;">Cart yako bado ni tupu.</p>';
+                document.getElementById('cartTotal').textContent = currencyFormatter.format(0);
+                return;
+            }
+            container.innerHTML = cart.map(item => `
+                <div class="cart-item">
+                    <span>${item.name} x${item.quantity}</span>
+                    <span>${currencyFormatter.format(item.price * item.quantity)}</span>
+                </div>
+            `).join('');
+            const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+            document.getElementById('cartTotal').textContent = currencyFormatter.format(total);
+        }
+
+        async function checkoutCart() {
+            if (cart.length === 0) {
+                return alert('Cart yako bado ni tupu. Ongeza bidhaa kwanza.');
+            }
+            const amount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+            const statusBox = document.getElementById('paymentStatus');
+            statusBox.style.display = 'block';
+            statusBox.textContent = 'Kufanya malipo... Tafadhali subiri.';
+
+            const response = await fetch('/api/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                statusBox.textContent = 'Malipo yameshindwa: ' + (result.message || 'Tatizo la mfumo.');
+                statusBox.style.backgroundColor = '#fed7d7';
+                return;
+            }
+            statusBox.style.backgroundColor = '#c6f6d5';
+            statusBox.innerHTML = `✅ Malipo yamefanikiwa. Reference: <strong>${result.token}</strong>. Status: <strong>${result.status}</strong>.`;
+            cart.length = 0;
+            renderCart();
+        }
+
+        async function checkPaymentStatus() {
+            const reference = document.getElementById('statusReference').value.trim();
+            const statusBox = document.getElementById('paymentStatus');
+            if (!reference) {
+                statusBox.style.display = 'block';
+                statusBox.style.backgroundColor = '#fed7d7';
+                statusBox.textContent = 'Tafadhali weka reference ya malipo kabla ya kuangalia.';
+                return;
+            }
+            statusBox.style.display = 'block';
+            statusBox.style.backgroundColor = '#edf2f7';
+            statusBox.textContent = 'Inatafuta hali ya malipo...';
+
+            const response = await fetch(`/api/payment-status/${encodeURIComponent(reference)}`);
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                statusBox.style.backgroundColor = '#fed7d7';
+                statusBox.textContent = result.message || 'Imeshindikana kupata hali ya malipo.';
+                return;
+            }
+            statusBox.style.backgroundColor = '#c6f6d5';
+            statusBox.innerHTML = `✅ Reference: <strong>${result.transaction.reference}</strong><br>Kiasi: <strong>TSh ${result.transaction.amount.toFixed(0)}</strong><br>Hali: <strong>${result.transaction.status}</strong><br>Tarehe: <strong>${new Date(result.transaction.created_at).toLocaleString()}</strong>`;
+        }
+
+        function userLogout() {
+            sessionStorage.removeItem('active_session');
+            sessionStorage.removeItem('active_user');
+            window.location.href = 'login.html';
+        }
+
+        window.onload = () => {
+            fetchProducts();
+            renderCart();
+        };
+    </script>
+</body>
+</html>
