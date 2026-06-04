@@ -203,6 +203,14 @@ app.get('/api/transactions', (req, res) => {
     });
 });
 
+app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, message: 'API route not found.' });
+});
+
+app.use((req, res) => {
+    res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+});
+
 app.listen(PORT, () => {
     console.log(`🚀 Mfumo umerun tena kwa mafanikio kwenye: http://localhost:${PORT}`);
 });
