@@ -5,7 +5,7 @@ const session = require('express-session');
 const db = require('./database');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(session({
     secret: 'smart_trade_africa_secret_key_2026',
