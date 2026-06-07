@@ -10,12 +10,20 @@
         .admin-card h3 { color: #1a365d; }
         .admin-card input, .admin-card textarea { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 16px; }
         .admin-card textarea { resize: vertical; min-height: 100px; }
+        .product-list-item { display: grid; grid-template-columns: 100px 1fr auto; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid #e2e8f0; }
+        .product-list-item:last-child { border-bottom: none; }
+        .product-card-image { width: 100px; height: 80px; border-radius: 10px; object-fit: contain; background: #f8fafc; display: block; }
+        .product-list-details { min-width: 0; }
+        .product-list-details h4 { margin: 0 0 6px; color: #1a365d; font-size: 16px; }
+        .product-list-details p { margin: 0; color: #4a5568; font-size: 13px; }
+        .product-list-actions button { background: #e53e3e; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+        .product-list-actions button:hover { background: #c53030; }
     </style>
 </head>
 <body>
     <script>
         if (sessionStorage.getItem('admin_session') !== 'authenticated_securely') {
-            alert('⚠️ Access Denied! Ingia kama Admin kwanza.');
+            alert('Access Denied! Ingia kama Admin kwanza.');
             window.location.href = 'login.html';
         }
     </script>
@@ -32,9 +40,16 @@
         <input type="text" id="prodName" placeholder="Jina la Bidhaa" required>
         <input type="number" id="prodPrice" placeholder="Bei ya Bidhaa (tsh)" required>
         <textarea id="prodDescription" placeholder="Maelezo ya Bidhaa"></textarea>
-        <input type="text" id="prodImage" placeholder="URL ya Picha ya Bidhaa">
+        <label for="prodImageFile" style="display:block; margin-bottom:8px; color:#4a5568;">Chagua picha ya bidhaa (hapa, sio URL)</label>
+        <input type="file" id="prodImageFile" accept="image/*">
         <button class="btn" onclick="saveProductToServer()">Hifadhi Bidhaa</button>
         <div id="adminMessage" style="margin-top:20px; color:#2f855a;"></div>
+    </div>
+
+    <div class="container admin-card" id="existingProductsCard">
+        <h3>Bidhaa Zilizopo</h3>
+        <p style="color:#4a5568; margin-bottom:20px;">Angalia bidhaa zilizopo sasa na unaweza kufuta kila moja ikiwa hutaki tena.</p>
+        <div id="existingProducts"></div>
     </div>
 
     <script>
@@ -42,32 +57,79 @@
             const name = document.getElementById('prodName').value.trim();
             const price = parseFloat(document.getElementById('prodPrice').value);
             const description = document.getElementById('prodDescription').value.trim();
-            const image_url = document.getElementById('prodImage').value.trim();
+            const fileInput = document.getElementById('prodImageFile');
+            const imageFile = fileInput.files[0];
             if (!name || !price || price <= 0) {
                 return alert('Tafadhali jaza jina la bidhaa na bei sahihi.');
             }
 
-            const response = await fetch('/api/products', {
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('price', price);
+            formData.append('description', description);
+            if (imageFile) {
+                formData.append('image', imageFile);
+            }
+
+            const response = await fetch('/api/products/upload', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, price, description, image_url })
+                body: formData
             });
             const result = await response.json();
             if (result.success) {
-                document.getElementById('adminMessage').textContent = '✅ Bidhaa imeongezwa kwa mafanikio.';
+                document.getElementById('adminMessage').textContent = 'Bidhaa imeongezwa kwa mafanikio.';
                 document.getElementById('prodName').value = '';
                 document.getElementById('prodPrice').value = '';
                 document.getElementById('prodDescription').value = '';
-                document.getElementById('prodImage').value = '';
+                fileInput.value = '';
+                loadAdminProducts();
             } else {
-                alert('Imeshindikana kuongeza bidhaa.');
+                alert(result.message || 'Imeshindikana kuongeza bidhaa.');
             }
+        }
+
+        async function loadAdminProducts() {
+            const response = await fetch('/api/products');
+            const products = await response.json();
+            const container = document.getElementById('existingProducts');
+            if (!Array.isArray(products) || products.length === 0) {
+                container.innerHTML = '<p style="color:#718096;">Hakuna bidhaa zilizopo.</p>';
+                return;
+            }
+            container.innerHTML = products.map(product => {
+                const imageUrl = product.image_url && product.image_url.trim() ? product.image_url : null;
+                return `
+                    <div class="product-list-item">
+                        ${imageUrl ? `<img class="product-card-image" src="${imageUrl}" alt="${product.name}">` : `<div class="product-card-image">No image</div>`}
+                        <div class="product-list-details">
+                            <h4>${product.name}</h4>
+                            <p>${product.description || 'Hakuna maelezo.'}</p>
+                            <p style="margin-top:6px; font-weight:bold; color:#2f855a;">${new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', minimumFractionDigits: 0 }).format(product.price)}</p>
+                        </div>
+                        <div class="product-list-actions">
+                            <button onclick="deleteProduct(${product.id})">Futa</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function deleteProduct(id) {
+            if (!confirm('Una uhakika unataka kufuta bidhaa hii?')) return;
+            const response = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                return alert(result.message || 'Imeshindikana kufuta bidhaa.');
+            }
+            loadAdminProducts();
         }
 
         function adminLogout() {
             sessionStorage.removeItem('admin_session');
             window.location.href = 'login.html';
         }
+
+        loadAdminProducts();
     </script>
 </body>
 </html>

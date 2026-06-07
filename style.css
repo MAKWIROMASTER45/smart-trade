@@ -58,3 +58,30 @@ header {
     background-color: #edf2f7;
     font-size: 14px;
 }
+
+.link-row {
+    margin-top: 20px;
+    font-size: 14px;
+    position: relative;
+    z-index: 1;
+    text-align: center;
+}
+.link-row a {
+    color: #4a5568;
+    text-decoration: none;
+    display: inline-block;
+    margin: 8px 8px 0;
+    padding: 12px 18px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.92);
+    box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+    min-width: 220px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.link-row a:hover {
+    transform: translateY(-1px);
+}
+.link-row a.admin-link {
+    color: #8B5CF6;
+    font-weight: 700;
+}

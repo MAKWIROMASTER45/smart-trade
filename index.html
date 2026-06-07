@@ -11,12 +11,17 @@
         .cart-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
         .cart-item:last-child { border-bottom: none; }
         .status-box { margin-top: 20px; padding: 15px; border-radius: 8px; background: #edf2f7; font-size: 14px; }
+        .product-card { background: white; border-radius: 14px; padding: 18px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+        .product-card { background: white; border-radius: 14px; padding: 18px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+        .product-card img, .product-card .product-image-placeholder { width: 100%; height: 180px; border-radius: 12px; margin-bottom: 14px; }
+        .product-card img { object-fit: contain; display: block; background: #f8fafc; }
+        .product-card .product-image-placeholder { display: flex; align-items: center; justify-content: center; background: #e2e8f0; color: #718096; font-size: 14px; }
     </style>
 </head>
 <body>
     <script>
         if (!sessionStorage.getItem('active_session')) {
-            alert('⚠️ Tafadhali ingia kwenye mfumo kwanza!');
+            alert('Tafadhali ingia kwenye mfumo kwanza!');
             window.location.href = 'login.html';
         }
     </script>
@@ -68,18 +73,31 @@
                 list.innerHTML = '<p style="grid-column: 1/-1; color:#718096;">Hakuna bidhaa sokoni kwa sasa.</p>';
                 return;
             }
-            list.innerHTML = products.map(product => `
+            list.innerHTML = products.map(product => {
+                const rawImageUrl = product.image_url && product.image_url.trim() ? product.image_url : null;
+                const imageUrl = normalizeImageUrl(rawImageUrl);
+                return `
                 <div class="product-card">
+                    ${imageUrl ? `<img class="product-card-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(product.name)}">` : `<div class="product-image-placeholder">Picha haipo</div>`}
                     <h3 style="color:#1a365d; margin-bottom:10px;">${escapeHtml(product.name)}</h3>
                     <p style="color:#4a5568; font-size:14px; min-height:64px;">${escapeHtml(product.description || 'Hakuna maelezo.')}</p>
                     <p style="color:#2f855a; font-weight:bold; font-size:18px; margin: 12px 0;">${currencyFormatter.format(product.price)}</p>
                     <button class="btn" data-product-id="${product.id}" data-product-name="${escapeHtml(product.name)}" data-product-price="${product.price}" onclick="addToCart(this)">Ongeza Cart</button>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         function escapeHtml(text) {
             return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function normalizeImageUrl(url) {
+            if (!url) return null;
+            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+                return url;
+            }
+            return '/' + url.replace(/^\//, '');
         }
 
         function addToCart(button) {
@@ -137,7 +155,7 @@
                 return;
             }
             statusBox.style.backgroundColor = '#c6f6d5';
-            statusBox.innerHTML = `✅ Malipo yamefanikiwa. Reference: <strong>${result.token}</strong>. Status: <strong>${result.status}</strong>.`;
+            statusBox.innerHTML = `Malipo yamefanikiwa. Reference: <strong>${result.token}</strong>. Status: <strong>${result.status}</strong>.`;
             cart.length = 0;
             renderCart();
         }
@@ -163,7 +181,7 @@
                 return;
             }
             statusBox.style.backgroundColor = '#c6f6d5';
-            statusBox.innerHTML = `✅ Reference: <strong>${result.transaction.reference}</strong><br>Kiasi: <strong>TSh ${result.transaction.amount.toFixed(0)}</strong><br>Hali: <strong>${result.transaction.status}</strong><br>Tarehe: <strong>${new Date(result.transaction.created_at).toLocaleString()}</strong>`;
+            statusBox.innerHTML = `Reference: <strong>${result.transaction.reference}</strong><br>Kiasi: <strong>TSh ${result.transaction.amount.toFixed(0)}</strong><br>Hali: <strong>${result.transaction.status}</strong><br>Tarehe: <strong>${new Date(result.transaction.created_at).toLocaleString()}</strong>`;
         }
 
         function userLogout() {
