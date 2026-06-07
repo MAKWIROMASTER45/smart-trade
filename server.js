@@ -1,34 +1,80 @@
-﻿const express = require('express');
+﻿require('dotenv').config();
+const express = require('express');
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
+const helmet = require('helmet');
+const multer = require('multer');
 const db = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
 
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: uploadDir,
+    filename: (req, file, cb) => {
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '-');
+        cb(null, `${Date.now()}-${safeName}`);
+    }
+});
+
+const upload = multer({
+    storage,
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif/;
+        const extension = path.extname(file.originalname).toLowerCase();
+        const allowedExt = ['.jpeg', '.jpg', '.png', '.gif'];
+        const isValid = allowedTypes.test(file.mimetype) && allowedExt.includes(extension);
+        cb(null, isValid);
+    },
+    limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+if (isProduction) {
+    app.set('trust proxy', 1);
+}
+app.use(helmet());
 app.use(session({
-    secret: 'smart_trade_africa_secret_key_2026',
+    secret: process.env.SESSION_SECRET || 'smart_trade_africa_secret_key_2026',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 1800000, sameSite: 'lax' }
+    cookie: {
+        secure: isProduction,
+        httpOnly: true,
+        maxAge: 1800000,
+        sameSite: 'lax'
+    }
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: false, limit: '10kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+const requireAuth = (req, res, next) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ success: false, message: 'Unaanza login kwanza.' });
+    }
+    next();
+};
 
 app.post('/api/register', (req, res) => {
     const { username, password } = req.body;
-    if (!username || !password) {
-        return res.status(400).json({ success: false, message: 'Tafadhali toa barua pepe na nenosiri.' });
+    if (!username || !password || password.length < 8) {
+        return res.status(400).json({ success: false, message: 'Tafadhali toa barua pepe na nenosiri lenye urefu wa angalau herufi 8.' });
     }
-    const userId = 'USR-' + Math.floor(Math.random() * 1000000);
-    const salt = bcrypt.genSaltSync(10);
-    const passwordHash = bcrypt.hashSync(password, salt);
+    const userId = `USR-${crypto.randomUUID()}`;
+    const passwordHash = bcrypt.hashSync(password, bcrypt.genSaltSync(12));
 
     const query = `INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)`;
-    db.run(query, [userId, username, passwordHash], (err) => {
+    db.run(query, [userId, username.trim(), passwordHash], (err) => {
         if (err) {
             return res.status(400).json({ success: false, message: 'Mtumiaji tayari yupo au imekosea.' });
         }
@@ -66,8 +112,8 @@ app.post('/api/password-reset-request', (req, res) => {
         if (err || !user) {
             return res.status(400).json({ success: false, message: 'Mtumiaji hapatikani.' });
         }
-        const resetId = 'PR-' + Math.floor(Math.random() * 1000000);
-        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const resetId = `PR-${crypto.randomUUID()}`;
+        const code = crypto.randomInt(100000, 1000000).toString();
         const expiresAt = Date.now() + 15 * 60 * 1000;
 
         const insertQuery = `INSERT INTO password_resets (id, user_id, code, expires_at) VALUES (?, ?, ?, ?)`;
@@ -141,13 +187,14 @@ app.get('/api/products', (req, res) => {
     });
 });
 
-app.post('/api/products', (req, res) => {
+app.post('/api/products', requireAuth, (req, res) => {
     const { name, price, description, image_url } = req.body;
-    if (!name || !price || price <= 0) {
+    const numericPrice = parseFloat(price);
+    if (!name || isNaN(numericPrice) || numericPrice <= 0) {
         return res.status(400).json({ success: false, message: 'Tafadhali toa jina na bei sahihi.' });
     }
     const query = `INSERT INTO products (name, description, price, image_url) VALUES (?, ?, ?, ?)`;
-    db.run(query, [name, description, price, image_url], function(err) {
+    db.run(query, [name.trim(), description || '', numericPrice, image_url || null], function(err) {
         if (err) {
             return res.status(500).json({ success: false, message: 'Imeshindikana kuhifadhi bidhaa.' });
         }
@@ -155,16 +202,49 @@ app.post('/api/products', (req, res) => {
     });
 });
 
-app.post('/api/checkout', (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).json({ success: false, message: 'Unaanza login kwanza.' });
+app.post('/api/products/upload', requireAuth, upload.single('image'), (req, res) => {
+    const { name, price, description } = req.body;
+    const numericPrice = parseFloat(price);
+    if (!name || isNaN(numericPrice) || numericPrice <= 0) {
+        return res.status(400).json({ success: false, message: 'Tafadhali toa jina na bei sahihi.' });
     }
+    if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Picha ya bidhaa inahitajika.' });
+    }
+    const imagePath = `uploads/${req.file.filename}`;
+    const query = `INSERT INTO products (name, description, price, image_url) VALUES (?, ?, ?, ?)`;
+    db.run(query, [name.trim(), description || '', numericPrice, imagePath], function(err) {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'Imeshindikana kuhifadhi bidhaa.' });
+        }
+        res.json({ success: true, message: 'Bidhaa imehifadhiwa.' });
+    });
+});
+
+app.delete('/api/products/:id', requireAuth, (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        return res.status(400).json({ success: false, message: 'Product ID required.' });
+    }
+    const query = `DELETE FROM products WHERE id = ?`;
+    db.run(query, [id], function(err) {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'Imeshindikana kufuta bidhaa.' });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ success: false, message: 'Bidhaa haikuonekana.' });
+        }
+        res.json({ success: true, message: 'Bidhaa imefutwa.' });
+    });
+});
+
+app.post('/api/checkout', requireAuth, (req, res) => {
     const amount = parseFloat(req.body.amount);
     if (isNaN(amount) || amount <= 0) {
         return res.status(400).json({ success: false, message: 'Kiasi batili.' });
     }
-    const transactionId = 'TXN-' + Math.floor(Math.random() * 1000000);
-    const referenceToken = 'MOCK-' + Math.floor(Math.random() * 1000000);
+    const transactionId = `TXN-${crypto.randomUUID()}`;
+    const referenceToken = `MOCK-${crypto.randomBytes(16).toString('hex')}`;
     const status = 'SUCCESSFUL';
 
     const query = `INSERT INTO transactions (id, user_id, amount, status, reference) VALUES (?, ?, ?, ?, ?)`;
@@ -176,10 +256,7 @@ app.post('/api/checkout', (req, res) => {
     });
 });
 
-app.get('/api/payment-status/:reference', (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).json({ success: false, message: 'Unaanza login kwanza.' });
-    }
+app.get('/api/payment-status/:reference', requireAuth, (req, res) => {
     const { reference } = req.params;
     const query = `SELECT id, amount, status, reference, created_at FROM transactions WHERE reference = ? AND user_id = ?`;
     db.get(query, [reference, req.session.userId], (err, transaction) => {
@@ -190,10 +267,7 @@ app.get('/api/payment-status/:reference', (req, res) => {
     });
 });
 
-app.get('/api/transactions', (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).json({ success: false, message: 'Unaanza login kwanza.' });
-    }
+app.get('/api/transactions', requireAuth, (req, res) => {
     const query = `SELECT id, amount, status, reference, created_at FROM transactions WHERE user_id = ? ORDER BY created_at DESC`;
     db.all(query, [req.session.userId], (err, rows) => {
         if (err) {
