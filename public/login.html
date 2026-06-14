@@ -75,6 +75,7 @@
 
             const response = await fetch('/api/register', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: email, password })
             });
@@ -92,6 +93,7 @@
 
             const response = await fetch('/api/login', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: email, password })
             });
@@ -112,6 +114,7 @@
             }
             const response = await fetch('/api/password-reset-request', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: email.trim() })
             });
@@ -136,6 +139,7 @@
 
             const resetResponse = await fetch('/api/password-reset', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: email.trim(), code: code.trim(), newPassword })
             });
@@ -173,6 +177,7 @@
                 await navigator.credentials.create({ publicKey });
                 const authResponse = await fetch('/api/biometric-auth', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: email })
                 });
@@ -190,18 +195,25 @@
             }
         }
 
-        function adminLoginPrompt() {
+        async function adminLoginPrompt() {
             const adminUser = prompt('Ingiza Jina la Msimamizi (Admin Username):');
             if (!adminUser) return;
             const adminPass = prompt('Ingiza Nenosiri la Msimamizi (Admin Password):');
             if (!adminPass) return;
-            if (adminUser === 'admin@smarttrade.africa' && adminPass === 'STA_Admin#2026!Secure') {
-                sessionStorage.setItem('admin_session', 'authenticated_securely');
-                alert('✅ Admin authenticated.');
-                window.location.href = 'admin.html';
-            } else {
-                alert('❌ Credentials invalid.');
+
+            const response = await fetch('/api/admin-login', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: adminUser.trim(), password: adminPass })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                return alert(result.message || '❌ Credentials invalid.');
             }
+            sessionStorage.setItem('admin_session', 'authenticated_securely');
+            alert('✅ Admin authenticated.');
+            window.location.href = 'admin.html';
         }
     </script>
 </body>

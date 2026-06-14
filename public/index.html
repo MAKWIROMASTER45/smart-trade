@@ -60,7 +60,7 @@
         document.getElementById('currentUser').textContent = sessionStorage.getItem('active_user') || 'Mtumiaji';
 
         async function fetchProducts() {
-            const response = await fetch('/api/products');
+            const response = await fetch('/api/products', { credentials: 'same-origin' });
             const products = await response.json();
             const list = document.getElementById('productList');
             if (!Array.isArray(products) || products.length === 0) {
@@ -119,6 +119,7 @@
 
             const response = await fetch('/api/checkout', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ amount })
             });
@@ -147,7 +148,7 @@
             statusBox.style.backgroundColor = '#edf2f7';
             statusBox.textContent = 'Inatafuta hali ya malipo...';
 
-            const response = await fetch(`/api/payment-status/${encodeURIComponent(reference)}`);
+            const response = await fetch(`/api/payment-status/${encodeURIComponent(reference)}`, { credentials: 'same-origin' });
             const result = await response.json();
             if (!response.ok || !result.success) {
                 statusBox.style.backgroundColor = '#fed7d7';

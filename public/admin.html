@@ -14,11 +14,19 @@
 </head>
 <body>
     <script>
-        if (sessionStorage.getItem('admin_session') !== 'authenticated_securely') {
-            alert('⚠️ Access Denied! Ingia kama Admin kwanza.');
-            window.location.href = 'login.html';
+        async function verifyAdmin() {
+            if (sessionStorage.getItem('admin_session') !== 'authenticated_securely') {
+                alert('⚠️ Access Denied! Ingia kama Admin kwanza.');
+                return window.location.href = 'login.html';
+            }
+            const response = await fetch('/api/admin-status', { credentials: 'same-origin' });
+            if (!response.ok) {
+                alert('⚠️ Admin session haijalindika au imeisha. Ingia tena.');
+                sessionStorage.removeItem('admin_session');
+                window.location.href = 'login.html';
+            }
         }
-    </script>
+        verifyAdmin();
 
     <header>
         <h2>Smart Trade Africa - Admin Panel</h2>
@@ -49,6 +57,7 @@
 
             const response = await fetch('/api/products', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, price, description, image_url })
             });
@@ -64,7 +73,8 @@
             }
         }
 
-        function adminLogout() {
+        async function adminLogout() {
+            await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
             sessionStorage.removeItem('admin_session');
             window.location.href = 'login.html';
         }

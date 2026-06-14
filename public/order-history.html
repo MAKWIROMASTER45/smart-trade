@@ -49,7 +49,7 @@
 
     <script>
         async function fetchTransactions() {
-            const response = await fetch('/api/transactions');
+            const response = await fetch('/api/transactions', { credentials: 'same-origin' });
             const data = await response.json();
             const messageEl = document.getElementById('historyMessage');
             const table = document.getElementById('transactionTable');

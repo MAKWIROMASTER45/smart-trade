@@ -58,9 +58,19 @@ app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false, limit: '10kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@smarttrade.africa';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'STA_Admin#2026!Secure';
+
 const requireAuth = (req, res, next) => {
     if (!req.session.userId) {
         return res.status(401).json({ success: false, message: 'Unaanza login kwanza.' });
+    }
+    next();
+};
+
+const requireAdmin = (req, res, next) => {
+    if (!req.session.userId || !req.session.isAdmin) {
+        return res.status(401).json({ success: false, message: 'Admin access required.' });
     }
     next();
 };
@@ -98,7 +108,35 @@ app.post('/api/login', (req, res) => {
         }
         req.session.userId = user.id;
         req.session.username = user.username;
+        req.session.isAdmin = false;
         res.json({ success: true, message: 'Umeingia kwa mafanikio!' });
+    });
+});
+
+app.post('/api/admin-login', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ success: false, message: 'Tafadhali toa jina la msimamizi na nenosiri.' });
+    }
+    if (username !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'Admin credentials invalid.' });
+    }
+    req.session.userId = 'ADMIN';
+    req.session.username = 'admin';
+    req.session.isAdmin = true;
+    res.json({ success: true, message: 'Admin imeingia kwa mafanikio.' });
+});
+
+app.get('/api/admin-status', requireAdmin, (req, res) => {
+    res.json({ success: true, message: 'Admin session active.' });
+});
+
+app.post('/api/logout', requireAuth, (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'Imeshindikana kutoka.' });
+        }
+        res.json({ success: true, message: 'Umetoka kwa mafanikio.' });
     });
 });
 
@@ -187,7 +225,7 @@ app.get('/api/products', (req, res) => {
     });
 });
 
-app.post('/api/products', requireAuth, (req, res) => {
+app.post('/api/products', requireAdmin, (req, res) => {
     const { name, price, description, image_url } = req.body;
     const numericPrice = parseFloat(price);
     if (!name || isNaN(numericPrice) || numericPrice <= 0) {
@@ -202,7 +240,7 @@ app.post('/api/products', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/products/upload', requireAuth, upload.single('image'), (req, res) => {
+app.post('/api/products/upload', requireAdmin, upload.single('image'), (req, res) => {
     const { name, price, description } = req.body;
     const numericPrice = parseFloat(price);
     if (!name || isNaN(numericPrice) || numericPrice <= 0) {
@@ -221,7 +259,19 @@ app.post('/api/products/upload', requireAuth, upload.single('image'), (req, res)
     });
 });
 
-app.delete('/api/products/:id', requireAuth, (req, res) => {
+function processMockPayment(amount, userId) {
+    const transactionId = `TXN-${crypto.randomUUID()}`;
+    const referenceToken = `MOCK-${crypto.randomBytes(16).toString('hex')}`;
+    return {
+        success: true,
+        transactionId,
+        referenceToken,
+        status: 'SUCCESSFUL',
+        message: 'Mock payment processed successfully.'
+    };
+}
+
+app.delete('/api/products/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
     if (!id) {
         return res.status(400).json({ success: false, message: 'Product ID required.' });
@@ -243,16 +293,14 @@ app.post('/api/checkout', requireAuth, (req, res) => {
     if (isNaN(amount) || amount <= 0) {
         return res.status(400).json({ success: false, message: 'Kiasi batili.' });
     }
-    const transactionId = `TXN-${crypto.randomUUID()}`;
-    const referenceToken = `MOCK-${crypto.randomBytes(16).toString('hex')}`;
-    const status = 'SUCCESSFUL';
 
+    const paymentResult = processMockPayment(amount, req.session.userId);
     const query = `INSERT INTO transactions (id, user_id, amount, status, reference) VALUES (?, ?, ?, ?, ?)`;
-    db.run(query, [transactionId, req.session.userId, amount, status, referenceToken], (err) => {
+    db.run(query, [paymentResult.transactionId, req.session.userId, amount, paymentResult.status, paymentResult.referenceToken], (err) => {
         if (err) {
             return res.status(500).json({ success: false, message: 'Imeshindikana kuhifadhi malipo.' });
         }
-        res.json({ success: true, status, token: referenceToken, message: 'Malipo yamefanikiwa.' });
+        res.json({ success: true, status: paymentResult.status, token: paymentResult.referenceToken, message: paymentResult.message });
     });
 });
 
